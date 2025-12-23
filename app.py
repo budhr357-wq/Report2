@@ -37,7 +37,7 @@ REPORT_TEXT = os.getenv("REPORT_TEXT", CONFIG["REPORT_TEXT"])
 NUMBER_OF_REPORTS = int(os.getenv("NUMBER_OF_REPORTS", CONFIG["NUMBER_OF_REPORTS"]))
 
 LOG_GROUP_LINK = "https://t.me/+bZAKT6wMT_gwZTFl"
-LOG_GROUP_ID = -1003368489757
+LOG_GROUP_ID = -1003368489757  # fallback
 
 SESSIONS = [v.strip() for k, v in os.environ.items() if k.startswith("SESSION_") and v.strip()]
 if not SESSIONS:
@@ -87,7 +87,6 @@ async def telegram_logger(session_str: str):
 
             LOG_SENDER_READY.set()
 
-            # Keep alive
             while True:
                 await asyncio.sleep(30)
     except Exception as e:
@@ -147,7 +146,7 @@ async def fetch_target_info(session_str: str):
     try:
         async with Client("target_info", api_id=API_ID, api_hash=API_HASH, session_string=session_str) as app:
             try:
-                if "+“ in CHANNEL_LINK:
+                if "+" in CHANNEL_LINK:
                     chat = await app.join_chat(CHANNEL_LINK)
                 else:
                     chat = await app.get_chat(CHANNEL_LINK)
@@ -173,7 +172,7 @@ async def fetch_target_info(session_str: str):
 async def send_report(session_str: str, index: int, channel: str, message_id: int, stats: dict):
     try:
         async with Client(f"reporter_{index}", api_id=API_ID, api_hash=API_HASH, session_string=session_str) as app:
-            chat = await app.get_chat(channel) if not "+" in channel else await app.join_chat(channel)
+            chat = await app.get_chat(channel) if "+" not in channel else await app.join_chat(channel)
             msg = await app.get_messages(chat.id, message_id)
             peer = await app.resolve_peer(chat.id)
             await asyncio.sleep(random.uniform(0.6, 1.5))
