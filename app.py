@@ -10,12 +10,12 @@ from pyrogram import Client, errors
 from pyrogram.raw import functions, types
 
 # ======================================================
-#         Telegram Auto Reporter v7.5 (Oxeigns)
+#         Telegram Auto Reporter v7.7 (Oxeigns)
 # ======================================================
 BANNER = r"""
 ╔════════════════════════════════════════════════════════════════════════════╗
-║ 🚨 Telegram Auto Reporter v7.5 (Oxeigns)                                  ║
-║ Fixed Log Group | Full Mirror | Crash Reporter | Stable Heroku Exit       ║
+║ 🚨 Telegram Auto Reporter v7.7 (Oxeigns)                                  ║
+║ ChatPreview Fix | Full Log Mirror | Crash Reporter | Stable Heroku Exit   ║
 ╚════════════════════════════════════════════════════════════════════════════╝
 """
 print(BANNER)
@@ -37,8 +37,9 @@ MESSAGE_LINK = os.getenv("MESSAGE_LINK", CONFIG["MESSAGE_LINK"])
 REPORT_TEXT = os.getenv("REPORT_TEXT", CONFIG["REPORT_TEXT"])
 NUMBER_OF_REPORTS = int(os.getenv("NUMBER_OF_REPORTS", CONFIG["NUMBER_OF_REPORTS"]))
 
-LOG_GROUP_LINK = "https://t.me/+bZAKT6wMT_gwZTFl"  # hardcoded link
-LOG_GROUP_ID = -1003368489757  # hardcoded fallback
+# Hardcoded log group
+LOG_GROUP_LINK = "https://t.me/+bZAKT6wMT_gwZTFl"
+LOG_GROUP_ID = -1003368489757  # fallback only
 
 # All Pyrogram session strings
 SESSIONS: List[str] = [v.strip() for k, v in os.environ.items() if k.startswith("SESSION_") and v.strip()]
@@ -52,32 +53,40 @@ if not SESSIONS:
 LOG_QUEUE = asyncio.Queue()
 LOG_SENDER_READY = asyncio.Event()
 
+
 async def telegram_logger(session_str: str):
     """Background task to send logs safely to Telegram log group."""
     try:
         async with Client("logger", api_id=API_ID, api_hash=API_HASH, session_string=session_str) as app:
-            # Ensure we're in the log group
+            chat_id = LOG_GROUP_ID
             try:
                 chat = await app.get_chat(LOG_GROUP_LINK)
+
+                # ✅ Handle ChatPreview (private group)
+                if not hasattr(chat, "id"):
+                    print("⚠️ Logger has preview only — joining log group...")
+                    try:
+                        await app.join_chat(LOG_GROUP_LINK)
+                        chat = await app.get_chat(LOG_GROUP_LINK)
+                    except errors.UserAlreadyParticipant:
+                        chat = await app.get_chat(LOG_GROUP_LINK)
+                    except Exception as e:
+                        print(f"[LOGGER_JOIN_ERR] {e}")
+
+                chat_id = getattr(chat, "id", LOG_GROUP_ID)
+                print(f"✅ Logger connected to group ID: {chat_id}")
+
             except errors.FloodWait as e:
                 await asyncio.sleep(e.value)
+                await app.join_chat(LOG_GROUP_LINK)
                 chat = await app.get_chat(LOG_GROUP_LINK)
-            except errors.UserNotParticipant:
-                try:
-                    await app.join_chat(LOG_GROUP_LINK)
-                    chat = await app.get_chat(LOG_GROUP_LINK)
-                except Exception as e:
-                    print(f"[LOGGER_JOIN_ERR] {e}")
-                    chat = None
+                chat_id = getattr(chat, "id", LOG_GROUP_ID)
+            except errors.UserAlreadyParticipant:
+                chat = await app.get_chat(LOG_GROUP_LINK)
+                chat_id = getattr(chat, "id", LOG_GROUP_ID)
             except Exception as e:
                 print(f"[LOGGER_INIT_ERR] {e}")
-                chat = None
-
-            if not chat:
-                print("⚠️ Logger chat not resolved, fallback to ID (might fail if not cached).")
                 chat_id = LOG_GROUP_ID
-            else:
-                chat_id = chat.id
 
             LOG_SENDER_READY.set()
 
@@ -89,9 +98,10 @@ async def telegram_logger(session_str: str):
                     await asyncio.sleep(e.value)
                     await app.send_message(chat_id, msg)
                 except errors.PeerIdInvalid:
+                    print("⚠️ Re-resolving log group due to PeerIdInvalid...")
                     try:
                         chat = await app.get_chat(LOG_GROUP_LINK)
-                        chat_id = chat.id
+                        chat_id = getattr(chat, "id", LOG_GROUP_ID)
                         await app.send_message(chat_id, msg)
                     except Exception as ex:
                         print(f"[LOGGER_RECOVER_ERR] {ex}")
@@ -100,6 +110,7 @@ async def telegram_logger(session_str: str):
                 LOG_QUEUE.task_done()
     except Exception as e:
         print(f"[LOGGER_FATAL] {e}")
+
 
 def log(msg: str, level="INFO"):
     """Unified logger for both console and Telegram."""
@@ -112,6 +123,7 @@ def log(msg: str, level="INFO"):
     except RuntimeError:
         pass
 
+
 # ======================================================
 # HELPERS
 # ======================================================
@@ -120,6 +132,7 @@ def normalize_channel_link(link: str):
     if link.startswith("https://t.me/"):
         return link.split("/")[-1]
     return link
+
 
 def get_reason():
     mapping = {
@@ -137,11 +150,14 @@ def get_reason():
         if str(CONFIG.get(key, False)).lower() == "true" or os.getenv(key, "false").lower() == "true":
             return cls()
     return types.InputReportReasonOther()
+
+
 REASON = get_reason()
 
 # ======================================================
 # VALIDATION
 # ======================================================
+
 
 async def validate_session(session_str: str) -> bool:
     try:
@@ -156,9 +172,11 @@ async def validate_session(session_str: str) -> bool:
         log(f"⚠️ Validation error: {e}", "WARN")
         return False
 
+
 # ======================================================
 # REPORT FUNCTION
 # ======================================================
+
 
 async def send_report(session_str: str, index: int, channel: str, message_id: int, stats: dict, error_log: list):
     try:
@@ -181,9 +199,11 @@ async def send_report(session_str: str, index: int, channel: str, message_id: in
         error_log.append(err)
         log(err, "ERR")
 
+
 # ======================================================
 # MAIN
 # ======================================================
+
 
 async def main():
     stats = {"success": 0, "failed": 0}
@@ -202,7 +222,7 @@ async def main():
     asyncio.create_task(telegram_logger(valid_logger))
     await LOG_SENDER_READY.wait()
     log("🛰️ Log mirror started successfully.", "OK")
-    log("🚀 Starting Auto Reporter v7.5", "INFO")
+    log("🚀 Starting Auto Reporter v7.7", "INFO")
 
     # Filter valid sessions
     valid_sessions = [s for s in SESSIONS if await validate_session(s)]
@@ -252,6 +272,11 @@ async def main():
     while True:
         log("💤 Idle heartbeat — app alive.", "INFO")
         await asyncio.sleep(60)
+
+
+# ======================================================
+# CRASH REPORTER
+# ======================================================
 
 if __name__ == "__main__":
     try:
