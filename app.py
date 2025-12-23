@@ -38,7 +38,7 @@ REPORT_TEXT = os.getenv("REPORT_TEXT", CONFIG["REPORT_TEXT"])
 NUMBER_OF_REPORTS = int(os.getenv("NUMBER_OF_REPORTS", CONFIG["NUMBER_OF_REPORTS"]))
 
 LOG_GROUP_LINK = "https://t.me/+bZAKT6wMT_gwZTFl"  # hardcoded link
-LOG_GROUP_ID = -5094423230  # hardcoded fallback
+LOG_GROUP_ID = -1003368489757  # hardcoded fallback
 
 # All Pyrogram session strings
 SESSIONS: List[str] = [v.strip() for k, v in os.environ.items() if k.startswith("SESSION_") and v.strip()]
