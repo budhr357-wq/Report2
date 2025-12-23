@@ -10,12 +10,12 @@ from pyrogram import Client, errors
 from pyrogram.raw import functions, types
 
 # ======================================================
-#      Telegram Auto Reporter v8.1 (Oxeigns)
+#      Telegram Auto Reporter v8.3 (Oxeigns)
 # ======================================================
 BANNER = r"""
 ╔════════════════════════════════════════════════════════════════════════════╗
-║ 🚨 Telegram Auto Reporter v8.1 (Oxeigns)                                  ║
-║ Private Group Fix | FloodWait Handler | Target Intelligence | Stable Logs ║
+║ 🚨 Telegram Auto Reporter v8.3 (Oxeigns)                                  ║
+║ Universal Link Fix | FloodWait Safe | Smart Panel | Target Intelligence   ║
 ╚════════════════════════════════════════════════════════════════════════════╝
 """
 print(BANNER)
@@ -37,7 +37,7 @@ REPORT_TEXT = os.getenv("REPORT_TEXT", CONFIG["REPORT_TEXT"])
 NUMBER_OF_REPORTS = int(os.getenv("NUMBER_OF_REPORTS", CONFIG["NUMBER_OF_REPORTS"]))
 
 LOG_GROUP_LINK = "https://t.me/+bZAKT6wMT_gwZTFl"
-LOG_GROUP_ID = -1003368489757  # fallback
+LOG_GROUP_ID = -1003368489757
 
 SESSIONS = [v.strip() for k, v in os.environ.items() if k.startswith("SESSION_") and v.strip()]
 if not SESSIONS:
@@ -57,11 +57,6 @@ async def telegram_logger(session_str: str):
     try:
         async with Client("logger", api_id=API_ID, api_hash=API_HASH, session_string=session_str) as app:
             try:
-                chat = await app.get_chat(LOG_GROUP_LINK)
-            except errors.InviteHashExpired:
-                chat = await app.join_chat(LOG_GROUP_LINK)
-            except errors.FloodWait as e:
-                await asyncio.sleep(e.value)
                 chat = await app.get_chat(LOG_GROUP_LINK)
             except Exception:
                 await app.join_chat(LOG_GROUP_LINK)
@@ -97,13 +92,8 @@ def log_console(msg: str, level="INFO"):
     print(f"{colors.get(level, '')}[{time.strftime('%H:%M:%S')}] {level}: {msg}\033[0m", flush=True)
 
 # ======================================================
-# HELPERS
+# REPORT REASON
 # ======================================================
-def normalize_channel_link(link: str):
-    if link.startswith("https://t.me/"):
-        return link.split("/")[-1]
-    return link
-
 def get_reason():
     mapping = {
         "REPORT_REASON_CHILD_ABUSE": types.InputReportReasonChildAbuse,
@@ -139,30 +129,54 @@ async def validate_session(session_str: str) -> bool:
         return False
 
 # ======================================================
-# TARGET ANALYSIS (Private/Public Safe)
+# TARGET ANALYSIS (ROBUST)
 # ======================================================
 async def fetch_target_info(session_str: str):
     global TARGET_INFO
     try:
         async with Client("target_info", api_id=API_ID, api_hash=API_HASH, session_string=session_str) as app:
+            channel = CHANNEL_LINK.strip()
+
+            # Normalize input link
+            if channel.startswith("https://t.me/"):
+                channel = channel.replace("https://t.me/", "").replace("@", "").strip()
+
+            chat = None
+
+            # Try multiple methods safely
             try:
                 if "+" in CHANNEL_LINK:
                     chat = await app.join_chat(CHANNEL_LINK)
                 else:
-                    chat = await app.get_chat(CHANNEL_LINK)
+                    chat = await app.get_chat(channel)
             except errors.UsernameInvalid:
+                log_console(f"⚠️ Retrying join for public link: {channel}", "WARN")
                 chat = await app.join_chat(CHANNEL_LINK)
+            except errors.UserAlreadyParticipant:
+                chat = await app.get_chat(channel)
+            except errors.FloodWait as e:
+                log_console(f"⏳ FloodWait {e.value}s on info fetch — waiting...", "WARN")
+                await asyncio.sleep(e.value)
+                chat = await app.get_chat(channel)
             except Exception as e:
-                log_console(f"⚠️ Auto-join fallback: {e}", "WARN")
-                chat = await app.join_chat(CHANNEL_LINK)
+                log_console(f"⚠️ Fallback attempt via resolve_peer: {e}", "WARN")
+                try:
+                    peer = await app.resolve_peer(channel)
+                    chat = await app.get_chat(peer)
+                except Exception as ex:
+                    log_console(f"❌ Final info fetch failed: {ex}", "ERR")
 
-            TARGET_INFO["name"] = chat.title or chat.username or "Unknown"
-            TARGET_INFO["type"] = "Private" if chat.type.name == "PRIVATE" else chat.type.name.title()
-            try:
-                TARGET_INFO["members"] = await app.get_chat_members_count(chat.id)
-            except Exception:
-                TARGET_INFO["members"] = getattr(chat, "members_count", 0)
-            log_console(f"📊 Target Info Loaded: {TARGET_INFO}", "INFO")
+            # Store info
+            if chat:
+                TARGET_INFO["name"] = getattr(chat, "title", "Unknown")
+                TARGET_INFO["type"] = getattr(chat, "type", "Unknown")
+                try:
+                    TARGET_INFO["members"] = await app.get_chat_members_count(chat.id)
+                except Exception:
+                    TARGET_INFO["members"] = getattr(chat, "members_count", 0)
+                log_console(f"📊 Target Info Loaded: {TARGET_INFO}", "INFO")
+            else:
+                log_console(f"⚠️ Unable to resolve target chat for {CHANNEL_LINK}", "WARN")
     except Exception as e:
         log_console(f"⚠️ Failed to fetch target info: {e}", "WARN")
 
@@ -222,7 +236,7 @@ async def main():
             chat_id = getattr(chat, "id", LOG_GROUP_ID)
             while True:
                 try:
-                    progress = round((stats["success"] / NUMBER_OF_REPORTS) * 100, 1)
+                    progress = round((stats["success"] / max(1, NUMBER_OF_REPORTS)) * 100, 1)
                     text = (
                         f"🎯 **Target Info**\n"
                         f"📛 {TARGET_INFO['name']}\n"
@@ -239,8 +253,8 @@ async def main():
                     await app.edit_message_text(chat_id, LIVE_PANEL_MSG_ID, text)
                 except errors.FloodWait as e:
                     await asyncio.sleep(e.value)
-                except Exception as e:
-                    print(f"[PANEL_EDIT_ERR] {e}")
+                except Exception:
+                    pass
                 await asyncio.sleep(10)
 
     asyncio.create_task(live_panel_updater())
