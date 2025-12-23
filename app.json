@@ -1,0 +1,17 @@
+{
+  "name": "Telegram Multi-Session Reporter",
+  "description": "Report Telegram messages using multiple user sessions automatically.",
+  "repository": "https://github.com/yourusername/auto_reporter",
+  "env": {
+    "API_ID": { "description": "Your Telegram API ID" },
+    "API_HASH": { "description": "Your Telegram API HASH" },
+    "NUMBER_OF_REPORTS": { "description": "How many reports to send", "value": "3" },
+    "SESSION_1": { "description": "Pyrogram session string 1" },
+    "SESSION_2": { "description": "Pyrogram session string 2 (optional)" },
+    "SESSION_3": { "description": "Pyrogram session string 3 (optional)" },
+    "CHANNEL_LINK": { "description": "Telegram channel/group link" },
+    "MESSAGE_LINK": { "description": "Telegram message link" },
+    "REPORT_TEXT": { "description": "Why are you reporting this content", "value": "Illegal content detected" }
+  },
+  "buildpacks": [{ "url": "heroku/python" }]
+}
