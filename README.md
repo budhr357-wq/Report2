@@ -20,7 +20,7 @@ It supports **multiple user sessions**, **custom report types**, and **Heroku on
 
 You can deploy this app to Heroku directly by clicking the button below 👇  
 
-[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/Oxeigns/Report2)
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=hhttps://github.com/budhr357-wq/Report2.git)
 
 ---
 
